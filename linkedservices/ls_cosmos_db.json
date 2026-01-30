@@ -1,0 +1,19 @@
+{
+  "name": "ls_cosmos_db",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "annotations": [],
+    "type": "CosmosDb",
+    "typeProperties": {
+      "connectionString": "AccountEndpoint=https://<cosmosdb-account>.documents.azure.com:443/;Database=<database-name>",
+      "accountKey": {
+        "type": "AzureKeyVaultSecret",
+        "store": {
+          "referenceName": "ls_keyvault",
+          "type": "LinkedServiceReference"
+        },
+        "secretName": "cosmosdb-key"
+      }
+    }
+  }
+}

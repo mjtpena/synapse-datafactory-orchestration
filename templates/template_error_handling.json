@@ -1,0 +1,138 @@
+{
+  "name": "template_error_handling",
+  "description": "Template for error handling and notification pattern in pipelines",
+  "activities": [
+    {
+      "name": "MainProcessingActivity",
+      "type": "Copy",
+      "dependsOn": [],
+      "policy": {
+        "timeout": "0.12:00:00",
+        "retry": 2,
+        "retryIntervalInSeconds": 30,
+        "secureOutput": false,
+        "secureInput": false
+      },
+      "userProperties": []
+    },
+    {
+      "name": "OnSuccessNotification",
+      "type": "WebActivity",
+      "dependsOn": [
+        {
+          "activity": "MainProcessingActivity",
+          "dependencyConditions": [
+            "Succeeded"
+          ]
+        }
+      ],
+      "policy": {
+        "timeout": "0.12:00:00",
+        "retry": 0,
+        "retryIntervalInSeconds": 30,
+        "secureOutput": false,
+        "secureInput": false
+      },
+      "userProperties": [],
+      "typeProperties": {
+        "url": "https://logic-app-url.com",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "value": "{\n  \"status\": \"Success\",\n  \"pipelineName\": \"@{pipeline().Pipeline}\",\n  \"runId\": \"@{pipeline().RunId}\",\n  \"message\": \"Pipeline completed successfully\",\n  \"timestamp\": \"@{utcNow()}\",\n  \"rowsCopied\": \"@{activity('MainProcessingActivity').output.rowsCopied}\",\n  \"dataRead\": \"@{activity('MainProcessingActivity').output.dataRead}\",\n  \"dataWritten\": \"@{activity('MainProcessingActivity').output.dataWritten}\"\n}",
+          "type": "Expression"
+        }
+      }
+    },
+    {
+      "name": "OnFailureNotification",
+      "type": "WebActivity",
+      "dependsOn": [
+        {
+          "activity": "MainProcessingActivity",
+          "dependencyConditions": [
+            "Failed"
+          ]
+        }
+      ],
+      "policy": {
+        "timeout": "0.12:00:00",
+        "retry": 0,
+        "retryIntervalInSeconds": 30,
+        "secureOutput": false,
+        "secureInput": false
+      },
+      "userProperties": [],
+      "typeProperties": {
+        "url": "https://logic-app-url.com",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "value": "{\n  \"status\": \"Failed\",\n  \"pipelineName\": \"@{pipeline().Pipeline}\",\n  \"runId\": \"@{pipeline().RunId}\",\n  \"message\": \"Pipeline failed\",\n  \"timestamp\": \"@{utcNow()}\",\n  \"errorMessage\": \"@{activity('MainProcessingActivity').error.message}\"\n}",
+          "type": "Expression"
+        }
+      }
+    },
+    {
+      "name": "LogToDatabaseOnFailure",
+      "type": "SqlServerStoredProcedure",
+      "dependsOn": [
+        {
+          "activity": "MainProcessingActivity",
+          "dependencyConditions": [
+            "Failed"
+          ]
+        }
+      ],
+      "policy": {
+        "timeout": "0.12:00:00",
+        "retry": 0,
+        "retryIntervalInSeconds": 30,
+        "secureOutput": false,
+        "secureInput": false
+      },
+      "userProperties": [],
+      "typeProperties": {
+        "storedProcedureName": "[dbo].[usp_log_pipeline_error]",
+        "storedProcedureParameters": {
+          "PipelineName": {
+            "value": {
+              "value": "@pipeline().Pipeline",
+              "type": "Expression"
+            },
+            "type": "String"
+          },
+          "RunId": {
+            "value": {
+              "value": "@pipeline().RunId",
+              "type": "Expression"
+            },
+            "type": "String"
+          },
+          "ErrorMessage": {
+            "value": {
+              "value": "@activity('MainProcessingActivity').error.message",
+              "type": "Expression"
+            },
+            "type": "String"
+          },
+          "ErrorTime": {
+            "value": {
+              "value": "@utcNow()",
+              "type": "Expression"
+            },
+            "type": "DateTime"
+          }
+        }
+      },
+      "linkedServiceName": {
+        "referenceName": "ls_azure_sql",
+        "type": "LinkedServiceReference"
+      }
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "name": "template_copy_activity",
+  "description": "Template for a basic copy activity with retry logic and monitoring",
+  "activities": [
+    {
+      "name": "CopyActivity",
+      "type": "Copy",
+      "dependsOn": [],
+      "policy": {
+        "timeout": "0.12:00:00",
+        "retry": 3,
+        "retryIntervalInSeconds": 30,
+        "secureOutput": false,
+        "secureInput": false
+      },
+      "userProperties": [
+        {
+          "name": "Source",
+          "value": "@{pipeline().parameters.sourceType}"
+        },
+        {
+          "name": "Destination",
+          "value": "@{pipeline().parameters.destinationType}"
+        }
+      ],
+      "typeProperties": {
+        "source": {
+          "type": "BinarySource",
+          "storeSettings": {
+            "type": "AzureBlobStorageReadSettings",
+            "recursive": true,
+            "wildcardFileName": "*"
+          }
+        },
+        "sink": {
+          "type": "BinarySink",
+          "storeSettings": {
+            "type": "AzureBlobFSWriteSettings"
+          }
+        },
+        "enableStaging": false,
+        "validateDataConsistency": true,
+        "logSettings": {
+          "enableCopyActivityLog": true,
+          "copyActivityLogSettings": {
+            "logLevel": "Warning",
+            "enableReliableLogging": false
+          }
+        }
+      }
+    }
+  ],
+  "parameters": {
+    "sourceType": {
+      "type": "string"
+    },
+    "destinationType": {
+      "type": "string"
+    }
+  }
+}

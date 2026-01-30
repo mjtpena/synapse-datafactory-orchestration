@@ -1,0 +1,13 @@
+{
+  "name": "ls_azure_blob_storage",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "annotations": [],
+    "type": "AzureBlobStorage",
+    "typeProperties": {
+      "serviceEndpoint": "https://<storage-account-name>.blob.core.windows.net/",
+      "accountKind": "StorageV2",
+      "authenticationType": "ManagedIdentity"
+    }
+  }
+}

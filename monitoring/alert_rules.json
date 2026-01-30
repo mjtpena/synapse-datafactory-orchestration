@@ -1,0 +1,103 @@
+{
+  "alertRules": [
+    {
+      "name": "Pipeline Failure Alert",
+      "description": "Alert when any pipeline fails",
+      "severity": "2",
+      "enabled": true,
+      "condition": {
+        "allOf": [
+          {
+            "field": "category",
+            "equals": "PipelineRuns"
+          },
+          {
+            "field": "status",
+            "equals": "Failed"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "actionGroupId": "/subscriptions/{subscription-id}/resourceGroups/{rg}/providers/microsoft.insights/actionGroups/DataEngineering-Alerts"
+        }
+      ],
+      "evaluationFrequency": "PT5M",
+      "windowSize": "PT5M"
+    },
+    {
+      "name": "Long Running Pipeline Alert",
+      "description": "Alert when pipeline runs longer than 2 hours",
+      "severity": "3",
+      "enabled": true,
+      "condition": {
+        "allOf": [
+          {
+            "field": "category",
+            "equals": "PipelineRuns"
+          },
+          {
+            "field": "durationMs",
+            "greaterThan": 7200000
+          }
+        ]
+      },
+      "actions": [
+        {
+          "actionGroupId": "/subscriptions/{subscription-id}/resourceGroups/{rg}/providers/microsoft.insights/actionGroups/DataEngineering-Warnings"
+        }
+      ],
+      "evaluationFrequency": "PT15M",
+      "windowSize": "PT15M"
+    },
+    {
+      "name": "High DIU Consumption Alert",
+      "description": "Alert when DIU consumption is high",
+      "severity": "3",
+      "enabled": true,
+      "condition": {
+        "allOf": [
+          {
+            "metricName": "IntegrationRuntimeCpuPercentage",
+            "operator": "GreaterThan",
+            "threshold": 80,
+            "timeAggregation": "Average"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "actionGroupId": "/subscriptions/{subscription-id}/resourceGroups/{rg}/providers/microsoft.insights/actionGroups/DataEngineering-Warnings"
+        }
+      ],
+      "evaluationFrequency": "PT5M",
+      "windowSize": "PT15M"
+    },
+    {
+      "name": "Activity Failure Rate Alert",
+      "description": "Alert when activity failure rate exceeds 10%",
+      "severity": "2",
+      "enabled": true,
+      "condition": {
+        "allOf": [
+          {
+            "field": "category",
+            "equals": "ActivityRuns"
+          },
+          {
+            "field": "status",
+            "equals": "Failed"
+          }
+        ],
+        "failureRateThreshold": 0.1
+      },
+      "actions": [
+        {
+          "actionGroupId": "/subscriptions/{subscription-id}/resourceGroups/{rg}/providers/microsoft.insights/actionGroups/DataEngineering-Alerts"
+        }
+      ],
+      "evaluationFrequency": "PT5M",
+      "windowSize": "PT30M"
+    }
+  ]
+}

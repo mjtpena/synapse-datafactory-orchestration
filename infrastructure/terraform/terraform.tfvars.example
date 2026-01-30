@@ -1,0 +1,17 @@
+# Example Terraform variables file
+# Copy this file to terraform.tfvars and fill in your values
+
+location                 = "australiaeast"
+environment              = "dev"
+project_name             = "synapse-df"
+enable_data_factory      = true
+enable_synapse           = true
+synapse_sql_admin_login  = "sqladmin"
+synapse_admin_object_id  = "YOUR_AZURE_AD_OBJECT_ID_HERE"
+
+common_tags = {
+  Project     = "Synapse Data Factory Orchestration"
+  ManagedBy   = "Terraform"
+  Environment = "dev"
+  Owner       = "DataEngineering"
+}

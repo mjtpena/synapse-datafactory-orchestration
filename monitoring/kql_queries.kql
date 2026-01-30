@@ -1,0 +1,231 @@
+// Azure Data Factory Monitoring Queries - KQL (Kusto Query Language)
+
+// ========================================
+// Pipeline Monitoring Queries
+// ========================================
+
+// Failed Pipelines in Last 24 Hours
+ADFPipelineRun
+| where TimeGenerated > ago(24h)
+| where Status == "Failed"
+| project TimeGenerated, PipelineName, RunId, Status, ErrorMessage = FailureMessage
+| order by TimeGenerated desc
+
+// Pipeline Success Rate by Name
+ADFPipelineRun
+| where TimeGenerated > ago(7d)
+| summarize
+    TotalRuns = count(),
+    Succeeded = countif(Status == "Succeeded"),
+    Failed = countif(Status == "Failed"),
+    SuccessRate = round(100.0 * countif(Status == "Succeeded") / count(), 2)
+    by PipelineName
+| order by SuccessRate asc
+
+// Pipeline Duration Trends
+ADFPipelineRun
+| where TimeGenerated > ago(7d)
+| where Status == "Succeeded"
+| project TimeGenerated, PipelineName, DurationMs = todouble(DurationMs)
+| summarize
+    AvgDuration = round(avg(DurationMs) / 1000 / 60, 2),
+    MaxDuration = round(max(DurationMs) / 1000 / 60, 2),
+    MinDuration = round(min(DurationMs) / 1000 / 60, 2)
+    by PipelineName, bin(TimeGenerated, 1d)
+| order by TimeGenerated desc
+
+// Long Running Pipelines
+ADFPipelineRun
+| where TimeGenerated > ago(24h)
+| where DurationMs > 3600000  // More than 1 hour
+| project TimeGenerated, PipelineName, RunId, DurationMinutes = DurationMs / 1000 / 60, Status
+| order by DurationMinutes desc
+
+// ========================================
+// Activity Monitoring Queries
+// ========================================
+
+// Failed Activities with Error Details
+ADFActivityRun
+| where TimeGenerated > ago(24h)
+| where Status == "Failed"
+| project
+    TimeGenerated,
+    PipelineName,
+    ActivityName,
+    ActivityType,
+    ErrorCode,
+    ErrorMessage = FailureMessage
+| order by TimeGenerated desc
+
+// Activity Type Distribution
+ADFActivityRun
+| where TimeGenerated > ago(7d)
+| summarize Count = count() by ActivityType
+| order by Count desc
+| render piechart
+
+// Copy Activity Performance
+ADFActivityRun
+| where TimeGenerated > ago(24h)
+| where ActivityType == "Copy"
+| where Status == "Succeeded"
+| extend RowsCopied = toint(Output.rowsCopied)
+| extend DataRead = todouble(Output.dataRead) / 1024 / 1024  // Convert to MB
+| extend DataWritten = todouble(Output.dataWritten) / 1024 / 1024  // Convert to MB
+| extend DurationMinutes = DurationMs / 1000 / 60
+| project
+    TimeGenerated,
+    ActivityName,
+    RowsCopied,
+    DataReadMB = round(DataRead, 2),
+    DataWrittenMB = round(DataWritten, 2),
+    DurationMinutes = round(DurationMinutes, 2),
+    ThroughputMBPerMin = round(DataRead / DurationMinutes, 2)
+| order by TimeGenerated desc
+
+// ========================================
+// Trigger Monitoring Queries
+// ========================================
+
+// Trigger Run Status
+ADFTriggerRun
+| where TimeGenerated > ago(24h)
+| summarize Count = count() by TriggerName, Status
+| order by TriggerName, Status
+
+// Missed Trigger Runs
+ADFTriggerRun
+| where TimeGenerated > ago(24h)
+| where Status == "Missed"
+| project TimeGenerated, TriggerName, TriggerType, Status
+| order by TimeGenerated desc
+
+// ========================================
+// Integration Runtime Queries
+// ========================================
+
+// Integration Runtime CPU Usage
+AzureMetrics
+| where TimeGenerated > ago(24h)
+| where ResourceProvider == "MICROSOFT.DATAFACTORY"
+| where MetricName == "IntegrationRuntimeCpuPercentage"
+| summarize AvgCPU = avg(Average), MaxCPU = max(Maximum) by bin(TimeGenerated, 5m)
+| order by TimeGenerated desc
+| render timechart
+
+// Integration Runtime Available Memory
+AzureMetrics
+| where TimeGenerated > ago(24h)
+| where ResourceProvider == "MICROSOFT.DATAFACTORY"
+| where MetricName == "IntegrationRuntimeAvailableMemory"
+| summarize AvgMemory = avg(Average), MinMemory = min(Minimum) by bin(TimeGenerated, 5m)
+| order by TimeGenerated desc
+| render timechart
+
+// ========================================
+// Data Movement Queries
+// ========================================
+
+// Daily Data Volume Processed
+ADFActivityRun
+| where TimeGenerated > ago(30d)
+| where ActivityType == "Copy"
+| where Status == "Succeeded"
+| extend DataReadGB = todouble(Output.dataRead) / 1024 / 1024 / 1024
+| summarize TotalDataReadGB = round(sum(DataReadGB), 2) by bin(TimeGenerated, 1d)
+| order by TimeGenerated desc
+| render timechart
+
+// Top Data Sources by Volume
+ADFActivityRun
+| where TimeGenerated > ago(7d)
+| where ActivityType == "Copy"
+| where Status == "Succeeded"
+| extend DataReadGB = todouble(Output.dataRead) / 1024 / 1024 / 1024
+| extend SourceType = tostring(Input.source.type)
+| summarize TotalDataGB = round(sum(DataReadGB), 2) by SourceType
+| order by TotalDataGB desc
+
+// ========================================
+// Error Analysis Queries
+// ========================================
+
+// Error Frequency by Error Code
+ADFActivityRun
+| where TimeGenerated > ago(7d)
+| where Status == "Failed"
+| summarize ErrorCount = count() by ErrorCode, ActivityType
+| order by ErrorCount desc
+
+// Common Error Messages
+ADFActivityRun
+| where TimeGenerated > ago(7d)
+| where Status == "Failed"
+| summarize Count = count() by ErrorMessage = FailureMessage
+| order by Count desc
+| take 10
+
+// ========================================
+// Performance Benchmarking
+// ========================================
+
+// Compare Pipeline Performance Week over Week
+let thisWeek = ADFPipelineRun
+| where TimeGenerated > ago(7d)
+| where Status == "Succeeded"
+| summarize ThisWeekAvgDuration = avg(DurationMs) by PipelineName;
+let lastWeek = ADFPipelineRun
+| where TimeGenerated between (ago(14d) .. ago(7d))
+| where Status == "Succeeded"
+| summarize LastWeekAvgDuration = avg(DurationMs) by PipelineName;
+thisWeek
+| join kind=inner lastWeek on PipelineName
+| extend PercentChange = round(100.0 * (ThisWeekAvgDuration - LastWeekAvgDuration) / LastWeekAvgDuration, 2)
+| project
+    PipelineName,
+    ThisWeekMinutes = round(ThisWeekAvgDuration / 1000 / 60, 2),
+    LastWeekMinutes = round(LastWeekAvgDuration / 1000 / 60, 2),
+    PercentChange
+| order by PercentChange desc
+
+// ========================================
+// Cost Analysis Queries
+// ========================================
+
+// Pipeline Run Cost Estimation (based on DIU hours)
+ADFActivityRun
+| where TimeGenerated > ago(30d)
+| where ActivityType == "Copy"
+| where Status == "Succeeded"
+| extend DIU = toint(Output.usedDataIntegrationUnits)
+| extend DurationHours = todouble(DurationMs) / 1000 / 3600
+| extend DIUHours = DIU * DurationHours
+| summarize
+    TotalDIUHours = round(sum(DIUHours), 2),
+    EstimatedCostUSD = round(sum(DIUHours) * 0.25, 2)  // Approximate cost per DIU-hour
+    by bin(TimeGenerated, 1d)
+| order by TimeGenerated desc
+
+// ========================================
+// Synapse Workspace Queries
+// ========================================
+
+// Synapse Pipeline Runs
+SynapsePipelineRuns
+| where TimeGenerated > ago(24h)
+| summarize Count = count() by Status, PipelineName
+| order by PipelineName, Status
+
+// Synapse SQL Pool Query Performance
+SynapseSqlPoolExecRequests
+| where TimeGenerated > ago(24h)
+| where Status == "Completed"
+| project
+    TimeGenerated,
+    Command,
+    TotalElapsedTimeMs,
+    RowCount,
+    DataProcessedMB = DataProcessedMB
+| order by TotalElapsedTimeMs desc
+| take 50

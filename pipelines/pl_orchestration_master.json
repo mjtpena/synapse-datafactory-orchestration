@@ -1,0 +1,226 @@
+{
+  "name": "pl_orchestration_master",
+  "properties": {
+    "activities": [
+      {
+        "name": "IngestRawData",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "pl_copy_blob_to_datalake",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "sourceContainer": "raw",
+            "sourcePath": "incoming",
+            "sinkContainer": "raw",
+            "sinkPath": {
+              "value": "@concat('data/', formatDateTime(utcNow(), 'yyyy-MM-dd'))",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "TransformData",
+        "type": "SynapseNotebook",
+        "dependsOn": [
+          {
+            "activity": "IngestRawData",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebook": {
+            "referenceName": "nb_transform_raw_to_processed",
+            "type": "NotebookReference"
+          },
+          "parameters": {
+            "inputPath": {
+              "value": {
+                "value": "@concat('raw/data/', formatDateTime(utcNow(), 'yyyy-MM-dd'))",
+                "type": "Expression"
+              },
+              "type": "string"
+            },
+            "outputPath": {
+              "value": {
+                "value": "@concat('processed/data/', formatDateTime(utcNow(), 'yyyy-MM-dd'))",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          },
+          "sparkPool": {
+            "referenceName": "sparkpool01",
+            "type": "BigDataPoolReference"
+          }
+        }
+      },
+      {
+        "name": "CurateData",
+        "type": "SynapseNotebook",
+        "dependsOn": [
+          {
+            "activity": "TransformData",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebook": {
+            "referenceName": "nb_curate_processed_data",
+            "type": "NotebookReference"
+          },
+          "parameters": {
+            "inputPath": {
+              "value": {
+                "value": "@concat('processed/data/', formatDateTime(utcNow(), 'yyyy-MM-dd'))",
+                "type": "Expression"
+              },
+              "type": "string"
+            },
+            "outputPath": {
+              "value": {
+                "value": "@concat('curated/data/', formatDateTime(utcNow(), 'yyyy-MM-dd'))",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          },
+          "sparkPool": {
+            "referenceName": "sparkpool01",
+            "type": "BigDataPoolReference"
+          }
+        }
+      },
+      {
+        "name": "DataQualityCheck",
+        "type": "SynapseNotebook",
+        "dependsOn": [
+          {
+            "activity": "CurateData",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebook": {
+            "referenceName": "nb_data_quality_checks",
+            "type": "NotebookReference"
+          },
+          "parameters": {
+            "dataPath": {
+              "value": {
+                "value": "@concat('curated/data/', formatDateTime(utcNow(), 'yyyy-MM-dd'))",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          },
+          "sparkPool": {
+            "referenceName": "sparkpool01",
+            "type": "BigDataPoolReference"
+          }
+        }
+      },
+      {
+        "name": "SendSuccessEmail",
+        "type": "WebActivity",
+        "dependsOn": [
+          {
+            "activity": "DataQualityCheck",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "url": "https://prod-00.australiaeast.logic.azure.com:443/workflows/xxx/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=xxx",
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "value": "{\n  \"dataFactoryName\": \"@{pipeline().DataFactory}\",\n  \"pipelineName\": \"@{pipeline().Pipeline}\",\n  \"runId\": \"@{pipeline().RunId}\",\n  \"status\": \"Success\",\n  \"message\": \"Pipeline completed successfully\",\n  \"executionTime\": \"@{utcNow()}\"\n}",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "SendFailureEmail",
+        "type": "WebActivity",
+        "dependsOn": [
+          {
+            "activity": "DataQualityCheck",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "url": "https://prod-00.australiaeast.logic.azure.com:443/workflows/xxx/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=xxx",
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "value": "{\n  \"dataFactoryName\": \"@{pipeline().DataFactory}\",\n  \"pipelineName\": \"@{pipeline().Pipeline}\",\n  \"runId\": \"@{pipeline().RunId}\",\n  \"status\": \"Failed\",\n  \"message\": \"Pipeline failed\",\n  \"executionTime\": \"@{utcNow()}\"\n}",
+            "type": "Expression"
+          }
+        }
+      }
+    ],
+    "parameters": {},
+    "annotations": [],
+    "lastPublishTime": "2024-01-01T00:00:00Z"
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines"
+}
