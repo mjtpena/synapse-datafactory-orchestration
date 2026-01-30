@@ -51,7 +51,6 @@ resource "azurerm_synapse_spark_pool" "spark_pool" {
   synapse_workspace_id = azurerm_synapse_workspace.synapse.id
   node_size_family     = "MemoryOptimized"
   node_size            = "Small"
-  node_count           = 3
 
   auto_scale {
     min_node_count = 3
@@ -63,12 +62,6 @@ resource "azurerm_synapse_spark_pool" "spark_pool" {
   }
 
   spark_version = "3.4"
-
-  dynamic_executor_allocation {
-    enabled             = true
-    min_executors       = 1
-    max_executors       = 10
-  }
 
   tags = var.tags
 }

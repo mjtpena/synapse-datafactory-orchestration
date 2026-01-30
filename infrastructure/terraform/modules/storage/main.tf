@@ -9,7 +9,7 @@ resource "azurerm_storage_account" "storage" {
 
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
-  enable_https_traffic_only       = true
+  https_traffic_only_enabled      = true
 
   blob_properties {
     delete_retention_policy {
